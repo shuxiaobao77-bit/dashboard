@@ -1,0 +1,2163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>活动运营数据看板</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Base ── */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                   "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background-color: #060c1a;
+      background-image:
+        radial-gradient(ellipse 90% 60% at 15% 10%,  rgba(99, 102, 241, 0.18) 0%, transparent 55%),
+        radial-gradient(ellipse 70% 50% at 85% 85%,  rgba(14, 165, 233, 0.14) 0%, transparent 50%),
+        radial-gradient(ellipse 50% 40% at 50% 50%,  rgba(139, 92, 246, 0.07) 0%, transparent 60%);
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    /* subtle grid overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Header ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      background: rgba(6, 12, 26, 0.82);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      padding: 16px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 4px 24px rgba(0,0,0,0.5);
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .header-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 0 16px rgba(99,102,241,0.55);
+    }
+    .header h1 {
+      font-size: 18px; font-weight: 700;
+      background: linear-gradient(90deg, #e2e8f0, #a5b4fc);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .header-meta { font-size: 12px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-date {
+      font-size: 12px; color: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      padding: 7px 16px;
+      border-radius: 20px;
+      letter-spacing: 0.02em;
+    }
+    .live-dot {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: #34d399;
+    }
+    .live-dot::before {
+      content: '';
+      width: 7px; height: 7px;
+      background: #34d399;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #34d399;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; box-shadow: 0 0 8px #34d399; }
+      50%      { opacity: 0.5; box-shadow: 0 0 3px #34d399; }
+    }
+
+    /* ── Layout ── */
+    .main { max-width: 1440px; margin: 0 auto; padding: 28px 32px 48px; position: relative; z-index: 1; }
+
+    .section { margin-bottom: 32px; }
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.35);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title span {
+      background: linear-gradient(90deg, #6366f1, #8b5cf6);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 12px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(99,102,241,0.3), transparent);
+    }
+
+    /* ── Cards ── */
+    .cards-grid { display: grid; gap: 16px; }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+    .card {
+      background: rgba(255,255,255,0.046);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 18px;
+      padding: 26px 28px 22px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255,255,255,0.18);
+      box-shadow:
+        0 12px 40px rgba(0,0,0,0.5),
+        0 0 0 1px rgba(255,255,255,0.06),
+        0 0 30px var(--glow, rgba(99,102,241,0.20)),
+        inset 0 1px 0 rgba(255,255,255,0.12);
+    }
+
+    /* Top accent glow line */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 18%; right: 18%;
+      height: 1px;
+      background: var(--accent-line, linear-gradient(90deg, transparent, #6366f1, transparent));
+      box-shadow: 0 0 12px var(--glow, rgba(99,102,241,0.7));
+    }
+
+    /* Corner shine */
+    .card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 60px; height: 60px;
+      background: radial-gradient(circle at 0 0, rgba(255,255,255,0.06), transparent 70%);
+      border-radius: 18px 0 0 0;
+      pointer-events: none;
+    }
+
+    /* Card inner bg accent */
+    .card-bg {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 50% at 90% 110%, var(--card-glow, rgba(99,102,241,0.08)), transparent);
+      pointer-events: none;
+    }
+
+    .card-label {
+      font-size: 11.5px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      position: relative;
+    }
+    .card-label .dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--dot-color, #6366f1);
+      box-shadow: 0 0 8px var(--dot-color, #6366f1);
+      flex-shrink: 0;
+    }
+
+    .card-value {
+      font-size: 38px;
+      font-weight: 800;
+      color: #f1f5f9;
+      line-height: 1;
+      letter-spacing: -1px;
+      position: relative;
+      text-shadow: var(--value-glow, 0 0 20px rgba(99,102,241,0.4));
+    }
+    .card-value .unit {
+      font-size: 14px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.35);
+      margin-left: 5px;
+      letter-spacing: 0;
+    }
+
+    .card-sub {
+      font-size: 12px;
+      color: rgba(255,255,255,0.28);
+      margin-top: 10px;
+      position: relative;
+    }
+
+    .card-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-top: 10px;
+      position: relative;
+    }
+    .badge-up   {
+      background: rgba(52,211,153,0.15);
+      color: #34d399;
+      border: 1px solid rgba(52,211,153,0.25);
+      box-shadow: 0 0 10px rgba(52,211,153,0.15);
+    }
+    .badge-down {
+      background: rgba(251,113,133,0.15);
+      color: #fb7185;
+      border: 1px solid rgba(251,113,133,0.25);
+      box-shadow: 0 0 10px rgba(251,113,133,0.15);
+    }
+    .badge-flat {
+      background: rgba(255,255,255,0.07);
+      color: rgba(255,255,255,0.4);
+      border: 1px solid rgba(255,255,255,0.10);
+    }
+
+    /* ── Alert card ── */
+    .card.alert-card {
+      background: rgba(239,68,68,0.10);
+      border-color: rgba(239,68,68,0.35);
+      --glow: rgba(239,68,68,0.25);
+    }
+    .card.alert-card::before {
+      background: linear-gradient(90deg, transparent, #ef4444, transparent);
+      box-shadow: 0 0 12px rgba(239,68,68,0.8);
+    }
+    .card.alert-card .card-value {
+      color: #fca5a5;
+      text-shadow: 0 0 20px rgba(239,68,68,0.6);
+    }
+    .card.alert-card .card-label { color: rgba(252,165,165,0.7); }
+    .alert-tag {
+      display: none;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fca5a5;
+      background: rgba(239,68,68,0.20);
+      border: 1px solid rgba(239,68,68,0.35);
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-top: 10px;
+      position: relative;
+    }
+    .card.alert-card .alert-tag { display: inline-block; }
+
+    /* ── Retention cards ── */
+    .card.ret-high {
+      --accent-line: linear-gradient(90deg, transparent, #22d3ee, transparent);
+      --glow: rgba(34,211,153,0.20);
+      --dot-color: #34d399;
+      --card-glow: rgba(34,211,153,0.08);
+      --value-glow: 0 0 24px rgba(34,211,153,0.45);
+    }
+    .card.ret-mid {
+      --accent-line: linear-gradient(90deg, transparent, #fbbf24, transparent);
+      --glow: rgba(251,191,36,0.20);
+      --dot-color: #fbbf24;
+      --card-glow: rgba(251,191,36,0.08);
+      --value-glow: 0 0 24px rgba(251,191,36,0.45);
+    }
+    .card.ret-low {
+      --accent-line: linear-gradient(90deg, transparent, #f97316, transparent);
+      --glow: rgba(249,115,22,0.20);
+      --dot-color: #f97316;
+      --card-glow: rgba(249,115,22,0.08);
+      --value-glow: 0 0 24px rgba(249,115,22,0.45);
+    }
+    .card.ret-verylow {
+      --accent-line: linear-gradient(90deg, transparent, #f43f5e, transparent);
+      --glow: rgba(244,63,94,0.20);
+      --dot-color: #f43f5e;
+      --card-glow: rgba(244,63,94,0.08);
+      --value-glow: 0 0 24px rgba(244,63,94,0.45);
+    }
+    .card.ret-high    .card-value { color: #6ee7b7; }
+    .card.ret-mid     .card-value { color: #fde68a; }
+    .card.ret-low     .card-value { color: #fdba74; }
+    .card.ret-verylow .card-value { color: #fda4af; }
+
+    /* ── Charts ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .chart-card {
+      background: rgba(255,255,255,0.046);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 18px;
+      padding: 26px 28px;
+      transition: box-shadow 0.25s;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
+    }
+    .chart-card:hover {
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.10);
+      border-color: rgba(255,255,255,0.14);
+    }
+    .chart-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .chart-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.75);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .chart-title-icon {
+      width: 26px; height: 26px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+    }
+    .chart-tag {
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+      padding: 3px 10px;
+      border-radius: 12px;
+    }
+    .chart-wrap { position: relative; height: 230px; }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      font-size: 11.5px;
+      color: rgba(255,255,255,0.18);
+      padding-top: 16px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Particle canvas ── */
+    #particleCanvas {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ── Number refresh flash ── */
+    @keyframes numFlash {
+      0%    { opacity: 1;   filter: brightness(1); }
+      18%   { opacity: 0.3; filter: brightness(2.2); }
+      38%   { opacity: 0.8; filter: brightness(1.4); }
+      60%   { opacity: 0.45; filter: brightness(1.8); }
+      100%  { opacity: 1;   filter: brightness(1); }
+    }
+    .num-flash { animation: numFlash 0.75s ease !important; }
+
+    /* ── Activity badge ── */
+    .activity-badge {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 11px; font-weight: 600; color: #34d399;
+      background: rgba(52,211,153,0.09);
+      border: 1px solid rgba(52,211,153,0.22);
+      padding: 5px 13px; border-radius: 20px;
+    }
+    .pulse-ring {
+      width: 8px; height: 8px; position: relative; flex-shrink: 0;
+    }
+    .pulse-ring::before,
+    .pulse-ring::after {
+      content: ''; position: absolute; inset: 0; border-radius: 50%;
+    }
+    .pulse-ring::before {
+      background: #34d399;
+      box-shadow: 0 0 6px rgba(52,211,153,0.8);
+    }
+    .pulse-ring::after {
+      background: rgba(52,211,153,0.5);
+      animation: ringExpand 1.8s ease-out infinite;
+    }
+    @keyframes ringExpand {
+      0%   { transform: scale(1);   opacity: 0.8; }
+      100% { transform: scale(2.6); opacity: 0; }
+    }
+
+    /* ── Chart tabs ── */
+    .chart-tabs {
+      display: flex; gap: 2px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding: 3px;
+    }
+    .chart-tab {
+      font-size: 11px; font-weight: 500;
+      color: rgba(255,255,255,0.38);
+      padding: 4px 11px; border-radius: 7px;
+      border: none; background: none; cursor: pointer;
+      transition: all 0.2s ease; white-space: nowrap;
+    }
+    .chart-tab:hover  { color: rgba(255,255,255,0.68); }
+    .chart-tab.active {
+      background: rgba(99,102,241,0.28);
+      color: #a5b4fc;
+      box-shadow: 0 0 12px rgba(99,102,241,0.18);
+    }
+
+    /* ── Chart wrap fade ── */
+    .chart-wrap { transition: opacity 0.2s ease; }
+    .chart-wrap.fading { opacity: 0 !important; }
+
+    /* ── Merged Top Panel ── */
+    .top-panel {
+      background: rgba(255,255,255,0.046);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 18px;
+      overflow: visible;
+      margin-bottom: 32px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      height: 270px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
+    }
+    .col-slot {
+      padding: 18px 22px 14px;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      position: relative;
+    }
+    .col-slot + .col-slot {
+      border-left: 1px solid rgba(255,255,255,0.07);
+    }
+    .col-slot-title {
+      font-size: 11px; font-weight: 600;
+      color: rgba(255,255,255,0.35);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    /* section-header wraps section-title + filter side by side */
+    .section-header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-header .section-title { margin-bottom: 0; flex: 1; }
+    .col-slot-title span {
+      background: linear-gradient(90deg, #6366f1, #8b5cf6);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .col-carousel {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .col-carousel .card {
+      position: absolute; inset: 0;
+      border-radius: 12px;
+      padding: 14px 16px 12px;
+      background: rgba(255,255,255,0.032);
+      backdrop-filter: none; -webkit-backdrop-filter: none;
+      box-shadow: none;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .col-carousel .card.active { opacity: 1; pointer-events: auto; }
+    .col-carousel .card:not(.active) { opacity: 0 !important; pointer-events: none !important; }
+    .col-carousel .card:hover { transform: none !important; box-shadow: none !important; border-color: rgba(255,255,255,0.09) !important; }
+    .col-carousel .card-value { font-size: 30px; }
+    .col-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 8px; flex-shrink: 0;
+    }
+    .col-nav-dots { display: flex; gap: 5px; align-items: center; }
+    .col-nav-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(255,255,255,0.18);
+      transition: background 0.2s, transform 0.2s;
+    }
+    .col-nav-dot.active {
+      background: #818cf8; transform: scale(1.3);
+      box-shadow: 0 0 6px rgba(129,140,248,0.6);
+    }
+    .col-nav-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+      color: rgba(255,255,255,0.45);
+      width: 24px; height: 24px; border-radius: 7px;
+      cursor: pointer; font-size: 15px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s ease; flex-shrink: 0;
+    }
+    .col-nav-btn:hover:not(:disabled) {
+      background: rgba(99,102,241,0.18);
+      border-color: rgba(99,102,241,0.38);
+      color: #a5b4fc;
+    }
+    .col-nav-btn:disabled { opacity: 0.22; cursor: default; }
+
+    /* ── Module Effectiveness Card ── */
+    .mod-list { display: flex; flex-direction: column; gap: 9px; margin-top: 14px; position: relative; }
+    .mod-item { display: flex; flex-direction: column; gap: 5px; }
+    .mod-item-header { display: flex; justify-content: space-between; align-items: center; }
+    .mod-item-name { font-size: 11.5px; color: rgba(255,255,255,0.55); }
+    .mod-item-pct { font-size: 12px; font-weight: 700; }
+    .mod-bar-bg { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+    .mod-bar { height: 4px; border-radius: 2px; width: 0; transition: width 1.1s cubic-bezier(0.22,1,0.36,1); }
+
+    /* ── Per-chart Date Filter ── */
+    .chart-filter { display: flex; align-items: center; gap: 2px; position: relative; }
+    .cf-btn {
+      font-size: 10.5px; font-weight: 500;
+      color: rgba(255,255,255,0.36);
+      background: none;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px; padding: 3px 8px;
+      cursor: pointer; transition: all 0.18s ease;
+      font-family: inherit; line-height: 1.4;
+    }
+    .cf-btn:hover { color: rgba(255,255,255,0.66); border-color: rgba(255,255,255,0.15); }
+    .cf-btn.active {
+      background: rgba(99,102,241,0.22); color: #a5b4fc;
+      border-color: rgba(99,102,241,0.42);
+    }
+    .cf-cal {
+      font-size: 12px; line-height: 1;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px; padding: 3px 7px;
+      cursor: pointer; transition: all 0.18s ease;
+      color: rgba(255,255,255,0.38); margin-left: 2px;
+      font-family: inherit;
+    }
+    .cf-cal:hover { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+    .cf-cal.open { background: rgba(99,102,241,0.22); color: #a5b4fc; border-color: rgba(99,102,241,0.42); }
+    .cf-datepicker {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px); right: 0;
+      align-items: center; gap: 6px;
+      background: rgba(8,12,28,0.97);
+      border: 1px solid rgba(99,102,241,0.35);
+      border-radius: 10px;
+      padding: 8px 12px;
+      z-index: 200;
+      white-space: nowrap;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.65);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .cf-datepicker.open { display: flex; }
+    .cf-date-input {
+      font-size: 11px; color: rgba(255,255,255,0.58);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 6px; padding: 3px 8px;
+      color-scheme: dark; font-family: inherit;
+      transition: border-color 0.18s;
+    }
+    .cf-date-input:focus { outline: none; border-color: rgba(99,102,241,0.5); }
+    .cf-date-sep { font-size: 11px; color: rgba(255,255,255,0.22); }
+    .cf-apply {
+      font-size: 11px; font-weight: 600;
+      color: #a5b4fc;
+      background: rgba(99,102,241,0.2);
+      border: 1px solid rgba(99,102,241,0.38);
+      border-radius: 6px; padding: 3px 9px;
+      cursor: pointer; transition: all 0.18s ease;
+      font-family: inherit;
+    }
+    .cf-apply:hover { background: rgba(99,102,241,0.36); }
+
+    /* ── KPI block date range inputs ── */
+    .kpi-range { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+    /* ── Flip digit animation ── */
+    .fd-front {
+      display: inline-block;
+      transform-origin: bottom center;
+      animation: fdFront 0.22s ease-in forwards;
+      backface-visibility: hidden;
+    }
+    @keyframes fdFront {
+      from { transform: perspective(120px) rotateX(0deg); }
+      to   { transform: perspective(120px) rotateX(-90deg); filter: brightness(0.4); }
+    }
+    .fd-back {
+      display: inline-block;
+      position: absolute; left: 0; top: 0;
+      transform-origin: top center;
+      animation: fdBack 0.24s ease-out forwards;
+      animation-fill-mode: backwards;
+      backface-visibility: hidden;
+    }
+    @keyframes fdBack {
+      from { transform: perspective(120px) rotateX(90deg); filter: brightness(0.4); }
+      to   { transform: perspective(120px) rotateX(0deg); filter: brightness(1); }
+    }
+
+    /* ── CSV Import Button ── */
+    .btn-import {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 12px; font-weight: 600;
+      color: #a5b4fc;
+      background: rgba(99,102,241,0.14);
+      border: 1px solid rgba(99,102,241,0.28);
+      padding: 7px 16px; border-radius: 20px;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.2s ease; white-space: nowrap;
+    }
+    .btn-import:hover {
+      background: rgba(99,102,241,0.28);
+      border-color: rgba(99,102,241,0.52);
+      box-shadow: 0 0 16px rgba(99,102,241,0.22);
+    }
+    .btn-import svg { flex-shrink: 0; }
+    .link-template {
+      font-size: 11px; color: rgba(255,255,255,0.32);
+      cursor: pointer; white-space: nowrap;
+      border-bottom: 1px dashed rgba(255,255,255,0.18);
+      padding-bottom: 1px;
+      transition: color 0.2s, border-color 0.2s;
+      user-select: none;
+    }
+    .link-template:hover { color: rgba(255,255,255,0.62); border-bottom-color: rgba(255,255,255,0.42); }
+
+    /* ── Import Toast ── */
+    .import-toast {
+      position: fixed; top: 76px; right: 32px;
+      z-index: 9999;
+      padding: 10px 20px; border-radius: 10px;
+      font-size: 13px; font-weight: 600;
+      pointer-events: none;
+      opacity: 0; transform: translateY(-10px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .import-toast.show { opacity: 1; transform: translateY(0); }
+    .import-toast.success {
+      background: rgba(52,211,153,0.16);
+      border: 1px solid rgba(52,211,153,0.36);
+      color: #34d399;
+      box-shadow: 0 4px 20px rgba(52,211,153,0.18);
+    }
+    .import-toast.warn {
+      background: rgba(251,191,36,0.14);
+      border: 1px solid rgba(251,191,36,0.34);
+      color: #fbbf24;
+      box-shadow: 0 4px 20px rgba(251,191,36,0.16);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 1100px) {
+      .top-panel { grid-template-columns: 1fr; height: auto; }
+      .col-slot + .col-slot { border-left: none; border-top: 1px solid rgba(255,255,255,0.07); }
+      .col-carousel { height: 180px; }
+      .grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 720px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .grid-4 { grid-template-columns: 1fr; }
+      .main { padding: 16px 14px 36px; }
+      .header { padding: 14px 18px; }
+      .card-value { font-size: 32px; }
+    }
+  </style>
+</head>
+<body>
+<canvas id="particleCanvas"></canvas>
+<div class="import-toast" id="importToast"></div>
+<input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleCsvFile(this)">
+
+<header class="header">
+  <div class="header-left">
+    <div class="header-icon">📊</div>
+    <div>
+      <h1>活动运营数据看板</h1>
+      <div class="header-meta">Activity Operations Dashboard</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-dot">LIVE</div>
+    <div class="header-date" id="headerDate"></div>
+    <button class="btn-import" onclick="triggerImport()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+      导入数据
+    </button>
+    <span class="link-template" onclick="downloadTemplate()">下载模板</span>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- ═══ Merged Top Panel: ①②④ ═══ -->
+  <div class="top-panel">
+
+    <!-- Column 1: 用户规模 -->
+    <div class="col-slot">
+      <div class="col-slot-title">
+        <span style="display:flex;align-items:center;gap:8px;"><span>①</span> 用户规模</span>
+        <div class="chart-filter">
+          <button class="cf-cal" onclick="toggleKpiPicker('ColUser',this)">📅</button>
+          <div class="cf-datepicker" id="kpi-dp-ColUser">
+            <input type="date" id="kpidS-ColUser" class="cf-date-input" value="2026-03-28">
+            <span class="cf-date-sep">—</span>
+            <input type="date" id="kpidE-ColUser" class="cf-date-input" value="2026-03-28">
+            <button class="cf-apply" onclick="applyKpiRange('ColUser')">✓</button>
+          </div>
+        </div>
+      </div>
+      <div class="col-carousel" id="carousel-user">
+
+        <div class="card active" style="--accent-line:linear-gradient(90deg,transparent,#818cf8,transparent);--glow:rgba(99,102,241,0.25);--dot-color:#818cf8;--card-glow:rgba(99,102,241,0.10);--value-glow:0 0 20px rgba(99,102,241,0.5)">
+          <div class="card-bg"></div>
+          <div class="card-label"><span class="dot"></span>DAU 日活跃用户数</div>
+          <div class="card-value" id="dau">—</div>
+          <div class="card-sub">较昨日 <span id="dauDiff">—</span></div>
+          <span class="card-badge" id="dauBadge"></span>
+        </div>
+
+        <div class="card" style="--accent-line:linear-gradient(90deg,transparent,#22d3ee,transparent);--glow:rgba(34,211,238,0.22);--dot-color:#22d3ee;--card-glow:rgba(34,211,238,0.08);--value-glow:0 0 20px rgba(34,211,238,0.4)">
+          <div class="card-bg"></div>
+          <div class="card-label"><span class="dot"></span>新增用户数</div>
+          <div class="card-value" id="newUsers">—</div>
+          <div class="card-sub">今日首次激活用户</div>
+          <span class="card-badge" id="newUsersBadge"></span>
+        </div>
+
+        <div class="card" style="--accent-line:linear-gradient(90deg,transparent,#34d399,transparent);--glow:rgba(52,211,153,0.22);--dot-color:#34d399;--card-glow:rgba(52,211,153,0.08);--value-glow:0 0 20px rgba(52,211,153,0.4)">
+          <div class="card-bg"></div>
+          <div class="card-label"><span class="dot"></span>连续签到人数</div>
+          <div class="card-value" id="partUsers">—</div>
+          <div class="card-sub">当日连续签到中的用户</div>
+          <span class="card-badge" id="partUsersBadge"></span>
+        </div>
+
+      </div>
+      <div class="col-nav">
+        <button class="col-nav-btn" id="btn-user-prev" onclick="colNav('user',-1)">‹</button>
+        <div class="col-nav-dots" id="dots-user">
+          <div class="col-nav-dot active"></div>
+          <div class="col-nav-dot"></div>
+          <div class="col-nav-dot"></div>
+        </div>
+        <button class="col-nav-btn" id="btn-user-next" onclick="colNav('user',1)">›</button>
+      </div>
+    </div>
+
+    <!-- Column 2: 参与深度 -->
+    <div class="col-slot">
+      <div class="col-slot-title">
+        <span style="display:flex;align-items:center;gap:8px;"><span>②</span> 参与深度</span>
+        <div class="chart-filter">
+          <button class="cf-cal" onclick="toggleKpiPicker('ColEng',this)">📅</button>
+          <div class="cf-datepicker" id="kpi-dp-ColEng">
+            <input type="date" id="kpidS-ColEng" class="cf-date-input" value="2026-03-28">
+            <span class="cf-date-sep">—</span>
+            <input type="date" id="kpidE-ColEng" class="cf-date-input" value="2026-03-28">
+            <button class="cf-apply" onclick="applyKpiRange('ColEng')">✓</button>
+          </div>
+        </div>
+      </div>
+      <div class="col-carousel" id="carousel-eng">
+
+        <div class="card active" style="--accent-line:linear-gradient(90deg,transparent,#a78bfa,transparent);--glow:rgba(167,139,250,0.22);--dot-color:#a78bfa;--card-glow:rgba(167,139,250,0.08);--value-glow:0 0 20px rgba(167,139,250,0.4)">
+          <div class="card-bg"></div>
+          <div class="card-label"><span class="dot"></span>总浏览量 PV</div>
+          <div class="card-value" id="pv">—</div>
+          <div class="card-sub">页面总访问次数</div>
+        </div>
+
+        <div class="card" style="--accent-line:linear-gradient(90deg,transparent,#f472b6,transparent);--glow:rgba(244,114,182,0.22);--dot-color:#f472b6;--card-glow:rgba(244,114,182,0.08);--value-glow:0 0 20px rgba(244,114,182,0.4)">
+          <div class="card-bg"></div>
+          <div class="card-label"><span class="dot"></span>评论数</div>
+          <div class="card-value" id="comments">—</div>
+          <div class="card-sub">今日新增评论</div>
+        </div>
+
+        <div class="card" style="--accent-line:linear-gradient(90deg,transparent,#fb7185,transparent);--glow:rgba(251,113,133,0.22);--dot-color:#fb7185;--card-glow:rgba(251,113,133,0.08);--value-glow:0 0 20px rgba(251,113,133,0.4)">
+          <div class="card-bg"></div>
+          <div class="card-label"><span class="dot"></span>有效评论数</div>
+          <div class="card-value" id="likes">—</div>
+          <div class="card-sub">≥6字非重复评论</div>
+        </div>
+
+      </div>
+      <div class="col-nav">
+        <button class="col-nav-btn" id="btn-eng-prev" onclick="colNav('eng',-1)">‹</button>
+        <div class="col-nav-dots" id="dots-eng">
+          <div class="col-nav-dot active"></div>
+          <div class="col-nav-dot"></div>
+          <div class="col-nav-dot"></div>
+        </div>
+        <button class="col-nav-btn" id="btn-eng-next" onclick="colNav('eng',1)">›</button>
+      </div>
+    </div>
+
+    <!-- Column 3: 留存质量 -->
+    <div class="col-slot">
+      <div class="col-slot-title">
+        <span style="display:flex;align-items:center;gap:8px;"><span>④</span> 留存质量</span>
+        <div class="chart-filter">
+          <button class="cf-cal" onclick="toggleKpiPicker('ColRet',this)">📅</button>
+          <div class="cf-datepicker" id="kpi-dp-ColRet">
+            <input type="date" id="kpidS-ColRet" class="cf-date-input" value="2026-03-28">
+            <span class="cf-date-sep">—</span>
+            <input type="date" id="kpidE-ColRet" class="cf-date-input" value="2026-03-28">
+            <button class="cf-apply" onclick="applyKpiRange('ColRet')">✓</button>
+          </div>
+        </div>
+      </div>
+      <div class="col-carousel" id="carousel-ret">
+
+        <div class="card ret-high active">
+          <div class="card-bg"></div>
+          <div class="card-label"><span class="dot"></span>1 日留存率</div>
+          <div class="card-value" id="ret1">—<span class="unit">%</span></div>
+          <div class="card-sub">次日留存</div>
+        </div>
+
+        <div class="card ret-mid">
+          <div class="card-bg"></div>
+          <div class="card-label"><span class="dot"></span>3 日留存率</div>
+          <div class="card-value" id="ret3">—<span class="unit">%</span></div>
+          <div class="card-sub">3日后仍活跃</div>
+        </div>
+
+        <div class="card ret-low">
+          <div class="card-bg"></div>
+          <div class="card-label"><span class="dot"></span>7 日留存率</div>
+          <div class="card-value" id="ret7">—<span class="unit">%</span></div>
+          <div class="card-sub">7日后仍活跃</div>
+        </div>
+
+        <div class="card ret-verylow">
+          <div class="card-bg"></div>
+          <div class="card-label"><span class="dot"></span>30 日留存率</div>
+          <div class="card-value" id="ret30">—<span class="unit">%</span></div>
+          <div class="card-sub">30日后仍活跃</div>
+        </div>
+
+      </div>
+      <div class="col-nav">
+        <button class="col-nav-btn" id="btn-ret-prev" onclick="colNav('ret',-1)">‹</button>
+        <div class="col-nav-dots" id="dots-ret">
+          <div class="col-nav-dot active"></div>
+          <div class="col-nav-dot"></div>
+          <div class="col-nav-dot"></div>
+          <div class="col-nav-dot"></div>
+        </div>
+        <button class="col-nav-btn" id="btn-ret-next" onclick="colNav('ret',1)">›</button>
+      </div>
+    </div>
+
+  </div><!-- /top-panel -->
+
+  <!-- ⑤ 活动效率 -->
+      <section class="section">
+        <div class="section-header">
+          <div class="section-title"><span>⑤</span> 活动效率</div>
+          <span class="kpi-range">
+            <div class="chart-filter">
+              <button class="cf-cal" onclick="toggleKpiPicker('Efficiency',this)">📅</button>
+              <div class="cf-datepicker" id="kpi-dp-Efficiency">
+                <input type="date" id="kpidS-Efficiency" class="cf-date-input" value="2026-03-28">
+                <span class="cf-date-sep">—</span>
+                <input type="date" id="kpidE-Efficiency" class="cf-date-input" value="2026-03-28">
+                <button class="cf-apply" onclick="applyKpiRange('Efficiency')">✓</button>
+              </div>
+            </div>
+          </span>
+        </div>
+        <div class="cards-grid grid-3">
+
+          <div class="card" style="
+            --accent-line:linear-gradient(90deg,transparent,#facc15,transparent);
+            --glow:rgba(250,204,21,0.22);--dot-color:#facc15;
+            --card-glow:rgba(250,204,21,0.08);--value-glow:0 0 24px rgba(250,204,21,0.4)">
+            <div class="card-bg"></div>
+            <div class="card-label"><span class="dot"></span>奖励发放总量</div>
+            <div class="card-value" id="rewardAmt">—<span class="unit">金币</span></div>
+            <div class="card-sub">今日活动奖励累计发放</div>
+          </div>
+
+          <div class="card" style="
+            --accent-line:linear-gradient(90deg,transparent,#38bdf8,transparent);
+            --glow:rgba(56,189,248,0.22);--dot-color:#38bdf8;
+            --card-glow:rgba(56,189,248,0.08);--value-glow:0 0 24px rgba(56,189,248,0.4)">
+            <div class="card-bg"></div>
+            <div class="card-label"><span class="dot"></span>活动转化率</div>
+            <div class="card-value" id="actConv">—<span class="unit">%</span></div>
+            <div class="card-sub">参与 → 完成任务转化</div>
+          </div>
+
+          <div class="card" style="
+            --accent-line:linear-gradient(90deg,transparent,#fb923c,transparent);
+            --glow:rgba(251,146,60,0.22);--dot-color:#fb923c;
+            --card-glow:rgba(251,146,60,0.08);--value-glow:0 0 24px rgba(251,146,60,0.4)">
+            <div class="card-bg"></div>
+            <div class="card-label"><span class="dot"></span>人均奖励成本</div>
+            <div class="card-value" id="rewardPerUser">—<span class="unit">金币/人</span></div>
+            <div class="card-sub">总奖励 ÷ 参与用户数</div>
+          </div>
+
+          <div class="card" style="
+            --accent-line:linear-gradient(90deg,transparent,#818cf8,transparent);
+            --glow:rgba(129,140,248,0.22);--dot-color:#818cf8;
+            --card-glow:rgba(129,140,248,0.08);--value-glow:0 0 24px rgba(129,140,248,0.4)">
+            <div class="card-bg"></div>
+            <div class="card-label"><span class="dot"></span>连续签到翻倍人数</div>
+            <div class="card-value" id="streakDouble">—<span class="unit">人</span></div>
+            <div class="card-sub">签到≥8天且满足评论条件</div>
+          </div>
+
+          <div class="card" style="
+            --accent-line:linear-gradient(90deg,transparent,#34d399,transparent);
+            --glow:rgba(52,211,153,0.22);--dot-color:#34d399;
+            --card-glow:rgba(52,211,153,0.08);--value-glow:0 0 24px rgba(52,211,153,0.4)">
+            <div class="card-bg"></div>
+            <div class="card-label"><span class="dot"></span>积分→金币兑换率</div>
+            <div class="card-value" id="pointConvRate">—<span class="unit">%</span></div>
+            <div class="card-sub">当日兑换金币用户占比</div>
+          </div>
+
+          <div class="card" style="
+            --accent-line:linear-gradient(90deg,transparent,#f472b6,transparent);
+            --glow:rgba(244,114,182,0.22);--dot-color:#f472b6;
+            --card-glow:rgba(244,114,182,0.08);--value-glow:0 0 24px rgba(244,114,182,0.4)">
+            <div class="card-bg"></div>
+            <div class="card-label"><span class="dot"></span>有效评论达标率</div>
+            <div class="card-value" id="validCommentRate">—<span class="unit">%</span></div>
+            <div class="card-sub">有效评论占总评论的比例</div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ⑥ 趋势图表 -->
+      <section class="section">
+        <div class="section-title"><span>⑥</span> 趋势图表</div>
+
+
+<div class="charts-grid">
+
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">
+                <span class="chart-title-icon" style="background:rgba(99,102,241,0.2);">📈</span>
+                DAU 趋势
+              </div>
+              <div class="chart-filter" id="cf-DAU">
+                <button class="cf-btn active" onclick="chartFilter('DAU',7,this)">7天</button>
+                <button class="cf-btn" onclick="chartFilter('DAU',14,this)">14天</button>
+                <button class="cf-btn" onclick="chartFilter('DAU',30,this)">30天</button>
+                <button class="cf-cal" onclick="toggleDatePicker('DAU')">📅</button>
+                <div class="cf-datepicker" id="dp-DAU">
+                  <input type="date" id="dpStart-DAU" class="cf-date-input" value="2026-03-22">
+                  <span class="cf-date-sep">—</span>
+                  <input type="date" id="dpEnd-DAU" class="cf-date-input" value="2026-03-28">
+                  <button class="cf-apply" onclick="applyChartDate('DAU')">✓</button>
+                </div>
+              </div>
+            </div>
+            <div class="chart-wrap" id="wrapDAU"><canvas id="chartDAU"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">
+                <span class="chart-title-icon" style="background:rgba(167,139,250,0.2);">📊</span>
+                积分产出 vs 积分兑换金币
+              </div>
+              <div class="chart-filter" id="cf-Recharge">
+                <button class="cf-btn active" onclick="chartFilter('Recharge',7,this)">7天</button>
+                <button class="cf-btn" onclick="chartFilter('Recharge',14,this)">14天</button>
+                <button class="cf-btn" onclick="chartFilter('Recharge',30,this)">30天</button>
+                <button class="cf-cal" onclick="toggleDatePicker('Recharge')">📅</button>
+                <div class="cf-datepicker" id="dp-Recharge">
+                  <input type="date" id="dpStart-Recharge" class="cf-date-input" value="2026-03-22">
+                  <span class="cf-date-sep">—</span>
+                  <input type="date" id="dpEnd-Recharge" class="cf-date-input" value="2026-03-28">
+                  <button class="cf-apply" onclick="applyChartDate('Recharge')">✓</button>
+                </div>
+              </div>
+            </div>
+            <div class="chart-wrap" id="wrapRecharge"><canvas id="chartRecharge"></canvas></div>
+          </div>
+
+          <div class="chart-card" style="grid-column:1/-1;">
+            <div class="chart-header">
+              <div class="chart-title">
+                <span class="chart-title-icon" style="background:rgba(99,102,241,0.2);">🔻</span>
+                用户行为漏斗
+              </div>
+              <div class="chart-filter" id="cf-Engagement">
+                <button class="cf-btn active" onclick="chartFilter('Engagement',7,this)">7天</button>
+                <button class="cf-btn" onclick="chartFilter('Engagement',14,this)">14天</button>
+                <button class="cf-btn" onclick="chartFilter('Engagement',30,this)">30天</button>
+                <button class="cf-cal" onclick="toggleDatePicker('Engagement')">📅</button>
+                <div class="cf-datepicker" id="dp-Engagement">
+                  <input type="date" id="dpStart-Engagement" class="cf-date-input" value="2026-03-22">
+                  <span class="cf-date-sep">—</span>
+                  <input type="date" id="dpEnd-Engagement" class="cf-date-input" value="2026-03-28">
+                  <button class="cf-apply" onclick="applyChartDate('Engagement')">✓</button>
+                </div>
+              </div>
+            </div>
+            <div class="chart-wrap" id="wrapEngagement" style="height:160px;"><canvas id="chartEngagement"></canvas></div>
+          </div>
+
+        </div>
+      </section>
+
+  <div class="footer">数据为模拟数据，仅供演示 &nbsp;·&nbsp; 活动运营数据看板 v2.0</div>
+</main>
+
+<script>
+// ─────────────────────────────────────────────
+//  Mock Data — KPI
+// ─────────────────────────────────────────────
+const today = {
+  dau: 2143, dauYesterday: 2087,
+  newUsers: 318, newUsersYest: 342,
+  partUsers: 1289, partUsersYest: 1201,
+  pv: 8734, comments: 437, likes: 312,
+  rechargeAmt: 9268, paySuccessRate: 94.7,
+  newRechargeRatio: 23.5,
+  ret1: 36.2, ret3: 15.8, ret7: 11.4, ret30: 4.9,
+  rewardAmt: 134280, actConv: 18.3,
+  rewardPerUser: 104,
+  streakDouble: 342, pointConvRate: 34.8, validCommentRate: 71.4
+};
+
+// ─────────────────────────────────────────────
+//  Multi-period Trend Data
+// ─────────────────────────────────────────────
+function genTrend(base, amp, n) {
+  return Array.from({length: n}, (_, i) =>
+    Math.max(0, Math.round(base + Math.sin(i * 0.8) * amp + Math.cos(i * 1.5) * amp * 0.4)));
+}
+
+const dataPeriods = {
+  '今日': {
+    labels: ['6h','8h','10h','12h','14h','16h','18h','20h'],
+    dau:        [320, 580, 1020, 1450, 1680, 1820, 1970, 2143],
+    recharge:   [8200, 18500, 35400, 61000, 89200, 111000, 126500, 134280],
+    pointsOut:  [4200, 9800, 18500, 31000, 45200, 57800, 68400, 76300],
+    pointsExch: [1800, 4200, 8600, 14500, 21000, 26800, 31500, 35200],
+    comments:   [28,  56,  105,  178,  260,  330,  390,  437],
+    likes:      [18,  38,   72,  122,  178,  226,  274,  312]
+  },
+  '近7天': {
+    labels: ['3/22','3/23','3/24','3/25','3/26','3/27','3/28'],
+    dau:        [1986, 2213, 2047, 1934, 2108, 2087, 2143],
+    recharge:   [112300, 134800, 98700, 85400, 123100, 104500, 134280],
+    pointsOut:  [68400, 79200, 72600, 65800, 76300, 71500, 76300],
+    pointsExch: [29800, 35600, 31200, 26400, 33700, 29900, 35200],
+    comments:   [398, 521, 445, 361, 489, 412, 437],
+    likes:      [278, 368, 312, 248, 341, 289, 312]
+  },
+  '近30天': {
+    labels: Array.from({length: 30}, (_, i) => {
+      const d = new Date(2026, 2, 28); d.setDate(d.getDate() - 29 + i);
+      return `${d.getMonth()+1}/${d.getDate()}`;
+    }),
+    dau:        genTrend(2050, 320, 30),
+    recharge:   genTrend(105000, 28000, 30),
+    pointsOut:  genTrend(72000, 9000, 30),
+    pointsExch: genTrend(31000, 5000, 30),
+    comments:   genTrend(430, 120, 30),
+    likes:      genTrend(300, 60, 30)
+  }
+};
+
+const channelData = {
+  labels: ['活动奖励', '签到', '评论互动', '邀请好友', '积分兑换赠送'],
+  values: [38.2, 24.6, 16.8, 12.9, 7.5]
+};
+
+// ─────────────────────────────────────────────
+//  Helpers
+// ─────────────────────────────────────────────
+function fmt(n) {
+  return n >= 10000 ? (n / 10000).toFixed(1) + ' 万' : n.toLocaleString('zh-CN');
+}
+function fmtMoney(n) {
+  return n.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+function diffLabel(cur, prev) {
+  const diff = cur - prev;
+  const pct  = ((diff / prev) * 100).toFixed(1);
+  if (diff > 0) return { text: `▲ +${diff.toLocaleString()} (${pct}%)`, cls: 'badge-up' };
+  if (diff < 0) return { text: `▼ ${diff.toLocaleString()} (${Math.abs(pct)}%)`, cls: 'badge-down' };
+  return { text: '— 持平', cls: 'badge-flat' };
+}
+function setBadge(id, diff) {
+  const el = document.getElementById(id);
+  el.textContent = diff.text;
+  el.className = 'card-badge ' + diff.cls;
+}
+
+// ─────────────────────────────────────────────
+//  Number Counter Animation
+// ─────────────────────────────────────────────
+function animateValue(id, target, duration, formatter) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const node = el.childNodes[0];
+  const startTime = performance.now();
+  const easeOut = t => 1 - Math.pow(1 - t, 4);
+  function step(now) {
+    const p = Math.min((now - startTime) / duration, 1);
+    node.textContent = formatter(target * easeOut(p));
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ─────────────────────────────────────────────
+//  Stagger Card Entrance
+// ─────────────────────────────────────────────
+function staggerEntrance() {
+  document.querySelectorAll('.card, .chart-card').forEach((card, i) => {
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(24px)';
+    setTimeout(() => {
+      card.style.transition = 'opacity 0.55s cubic-bezier(0.22,1,0.36,1), transform 0.55s cubic-bezier(0.22,1,0.36,1), box-shadow 0.25s ease, border-color 0.25s ease';
+      card.style.opacity = '1';
+      card.style.transform = 'translateY(0)';
+      setTimeout(() => {
+        card.style.transition = '';
+        card.style.opacity = '';
+        card.style.transform = '';
+      }, 600);
+    }, 100 + i * 70);
+  });
+}
+
+// ─────────────────────────────────────────────
+//  Particle Background
+// ─────────────────────────────────────────────
+function initParticles() {
+  const canvas = document.getElementById('particleCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  const colors = [[129,140,248],[34,211,238],[52,211,153],[167,139,250]];
+  const particles = Array.from({length: 55}, () => {
+    const c = colors[Math.floor(Math.random() * colors.length)];
+    return {
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      r: Math.random() * 1.4 + 0.4,
+      vx: (Math.random() - 0.5) * 0.25,
+      vy: -(Math.random() * 0.35 + 0.08),
+      alpha: Math.random() * 0.3 + 0.07,
+      color: c
+    };
+  });
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${p.color[0]},${p.color[1]},${p.color[2]},${p.alpha})`;
+      ctx.fill();
+      p.x += p.vx;
+      p.y += p.vy;
+      if (p.y < -5)              { p.y = canvas.height + 5; p.x = Math.random() * canvas.width; }
+      if (p.x < -5)              p.x = canvas.width + 5;
+      if (p.x > canvas.width + 5) p.x = -5;
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// ─────────────────────────────────────────────
+//  Chart Helpers
+// ─────────────────────────────────────────────
+const GRID = 'rgba(255,255,255,0.055)';
+const TICK = 'rgba(255,255,255,0.38)';
+const FONT = { family: "'PingFang SC', 'Hiragino Sans GB', sans-serif", size: 11 };
+
+function baseScales(yFmt) {
+  return {
+    x: {
+      grid: { display: false },
+      border: { display: false },
+      ticks: { color: TICK, font: FONT, padding: 6 }
+    },
+    y: {
+      grid: { color: GRID, drawBorder: false },
+      border: { display: false },
+      ticks: { color: TICK, font: FONT, padding: 8, callback: yFmt || (v => v) }
+    }
+  };
+}
+
+function makeGradient(ctx, area, r, g, b) {
+  const grad = ctx.createLinearGradient(0, area.top, 0, area.bottom);
+  grad.addColorStop(0,   `rgba(${r},${g},${b},0.45)`);
+  grad.addColorStop(0.6, `rgba(${r},${g},${b},0.12)`);
+  grad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+  return grad;
+}
+
+// ─────────────────────────────────────────────
+//  Plugins
+// ─────────────────────────────────────────────
+const glowPlugin = {
+  id: 'glowLine',
+  beforeDatasetsDraw(chart) {
+    const { ctx } = chart;
+    ctx.save();
+    chart.data.datasets.forEach((ds, i) => {
+      if (!ds._glowColor) return;
+      const meta = chart.getDatasetMeta(i);
+      if (!meta.visible) return;
+      ctx.shadowColor = ds._glowColor;
+      ctx.shadowBlur  = 12;
+    });
+  },
+  afterDatasetsDraw(chart) { chart.ctx.restore(); }
+};
+
+// Left-to-right line reveal via canvas clipping
+const lineClipPlugin = {
+  id: 'lineClip',
+  beforeDatasetsDraw(chart) {
+    const p = chart._clipProgress;
+    if (p == null || p >= 1) return;
+    const { ctx, chartArea } = chart;
+    if (!chartArea) return;
+    const clipX = chartArea.left + (chartArea.right - chartArea.left) * p;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, clipX + 6, chart.height);
+    ctx.clip();
+  },
+  afterDatasetsDraw(chart) {
+    if (chart._clipProgress != null && chart._clipProgress < 1) chart.ctx.restore();
+  }
+};
+
+const doughnutCenter = {
+  id: 'doughnutCenter',
+  beforeDraw(chart) {
+    if (chart.config.type !== 'doughnut') return;
+    if (!chart.chartArea) return;
+    const { ctx } = chart;
+    const { left, right, top, bottom } = chart.chartArea;
+    const cx = (left + right) / 2;
+    const cy = (top  + bottom) / 2;
+    ctx.save();
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle    = 'rgba(255,255,255,0.85)';
+    ctx.font         = `800 22px ${FONT.family}`;
+    ctx.shadowColor  = 'rgba(52,211,153,0.6)';
+    ctx.shadowBlur   = 14;
+    ctx.fillText('积分', cx, cy - 10);
+    ctx.shadowBlur = 0;
+    ctx.font       = `500 11px ${FONT.family}`;
+    ctx.fillStyle  = 'rgba(255,255,255,0.35)';
+    ctx.fillText('来源占比', cx, cy + 13);
+    ctx.restore();
+  }
+};
+
+Chart.register(glowPlugin, lineClipPlugin, doughnutCenter);
+
+// ─────────────────────────────────────────────
+//  Line Reveal Animation
+// ─────────────────────────────────────────────
+function animateLineReveal(chart) {
+  chart._clipProgress = 0;
+  const start = performance.now();
+  const duration = 900;
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    chart._clipProgress = 1 - Math.pow(1 - t, 3);
+    chart.render();
+    if (t < 1) requestAnimationFrame(step);
+    else chart._clipProgress = null;
+  }
+  requestAnimationFrame(step);
+}
+
+const legendStyle = {
+  labels: { color: TICK, font: FONT, boxWidth: 10, boxHeight: 10, borderRadius: 3, padding: 16, usePointStyle: true, pointStyle: 'circle' }
+};
+
+// ─────────────────────────────────────────────
+//  Chart 1: DAU Line
+// ─────────────────────────────────────────────
+const dauChart = new Chart(document.getElementById('chartDAU'), {
+  type: 'line',
+  data: {
+    labels: dataPeriods['近7天'].labels,
+    datasets: [{
+      label: 'DAU',
+      data: dataPeriods['近7天'].dau,
+      borderColor: '#818cf8',
+      borderWidth: 3,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      pointBackgroundColor: '#818cf8',
+      pointBorderColor: 'rgba(129,140,248,0.3)',
+      pointBorderWidth: 3,
+      fill: true,
+      tension: 0.42,
+      backgroundColor: (ctx) => {
+        const chart = ctx.chart;
+        if (!chart.chartArea) return 'transparent';
+        return makeGradient(chart.ctx, chart.chartArea, 129, 140, 248);
+      },
+      _glowColor: 'rgba(129,140,248,0.8)'
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 0 },
+    plugins: {
+      legend: legendStyle,
+      tooltip: {
+        backgroundColor: 'rgba(10,14,30,0.92)',
+        borderColor: 'rgba(129,140,248,0.4)',
+        borderWidth: 1,
+        titleColor: 'rgba(255,255,255,0.7)',
+        bodyColor: '#818cf8',
+        callbacks: { label: c => ` DAU：${c.parsed.y.toLocaleString('zh-CN')}` }
+      }
+    },
+    scales: baseScales(v => v >= 10000 ? (v/10000).toFixed(1)+'万' : v)
+  }
+});
+
+// ─────────────────────────────────────────────
+//  Chart 2: Points Out vs Points Exchanged (dual line)
+// ─────────────────────────────────────────────
+const rechargeChart = new Chart(document.getElementById('chartRecharge'), {
+  type: 'line',
+  data: {
+    labels: dataPeriods['近7天'].labels,
+    datasets: [
+      {
+        label: '积分产出',
+        data: dataPeriods['近7天'].pointsOut,
+        borderColor: '#a78bfa',
+        borderWidth: 2.5,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#a78bfa',
+        pointBorderColor: 'rgba(167,139,250,0.3)',
+        pointBorderWidth: 3,
+        fill: true,
+        tension: 0.42,
+        backgroundColor: (ctx) => {
+          const chart = ctx.chart;
+          if (!chart.chartArea) return 'transparent';
+          return makeGradient(chart.ctx, chart.chartArea, 167, 139, 250);
+        },
+        _glowColor: 'rgba(167,139,250,0.7)'
+      },
+      {
+        label: '积分兑换消耗',
+        data: dataPeriods['近7天'].pointsExch,
+        borderColor: '#fbbf24',
+        borderWidth: 2.5,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#fbbf24',
+        pointBorderColor: 'rgba(251,191,36,0.3)',
+        pointBorderWidth: 3,
+        fill: false,
+        tension: 0.42,
+        _glowColor: 'rgba(251,191,36,0.7)'
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 0 },
+    plugins: {
+      legend: legendStyle,
+      tooltip: {
+        backgroundColor: 'rgba(10,14,30,0.92)',
+        borderColor: 'rgba(167,139,250,0.4)',
+        borderWidth: 1,
+        titleColor: 'rgba(255,255,255,0.7)',
+        bodyColor: 'rgba(255,255,255,0.8)',
+        callbacks: { label: c => ` ${c.dataset.label}：${c.parsed.y.toLocaleString('zh-CN')} 积分` }
+      }
+    },
+    scales: baseScales(v => v >= 10000 ? (v/10000).toFixed(1) + '万' : v)
+  }
+});
+
+// ─────────────────────────────────────────────
+//  Chart 3: Doughnut — Channels
+// ─────────────────────────────────────────────
+const channelChart = new Chart(document.getElementById('chartChannel'), {
+  type: 'doughnut',
+  data: {
+    labels: channelData.labels,
+    datasets: [{
+      data: channelData.values,
+      backgroundColor: [
+        'rgba(129,140,248,0.85)',
+        'rgba(34,211,238,0.85)',
+        'rgba(52,211,153,0.85)',
+        'rgba(251,191,36,0.85)',
+        'rgba(244,114,182,0.85)'
+      ],
+      borderColor: 'rgba(6,12,26,0.8)',
+      borderWidth: 3,
+      hoverOffset: 8,
+      hoverBorderColor: '#fff'
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    cutout: '62%',
+    animation: { animateRotate: true, animateScale: false, duration: 1200, easing: 'easeOutQuart' },
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: { color: TICK, font: FONT, boxWidth: 10, boxHeight: 10, borderRadius: 3, padding: 10, usePointStyle: true, pointStyle: 'circle' }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(10,14,30,0.92)',
+        borderColor: 'rgba(255,255,255,0.12)',
+        borderWidth: 1,
+        titleColor: 'rgba(255,255,255,0.7)',
+        bodyColor: 'rgba(255,255,255,0.8)',
+        callbacks: { label: c => ` ${c.label}：${c.parsed}%` }
+      }
+    }
+  }
+});
+
+// ─────────────────────────────────────────────
+//  Chart 4: User Behavior Funnel
+// ─────────────────────────────────────────────
+const funnelBase = [
+  { label: '登录人数',     value: 2143 },
+  { label: '签到激活人数', value: 1289 },
+  { label: '评论人数',     value: 892  },
+  { label: '完成每日任务', value: 643  },
+  { label: '积分兑换金币', value: 356  }
+];
+const engColors = ['#6366f1','#06b6d4','#10b981','#f59e0b','#ec4899'];
+let engValues  = funnelBase.map(f => f.value);
+let engProg    = funnelBase.map(() => 0);
+let engHover   = -1;
+let engAnimId  = null;
+
+function drawEngChart() {
+  const canvas = document.getElementById('chartEngagement');
+  const wrap   = document.getElementById('wrapEngagement');
+  const dpr = window.devicePixelRatio || 1;
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  if (!W || !H) return;
+  if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+    canvas.width  = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  const n     = funnelBase.length;
+  const cellW = W / n;
+  const r     = Math.min(cellW * 0.42, H * 0.62);
+  const lineW = Math.max(r * 0.13, 8);
+  const cy    = r + 22;
+
+  // store columns for hover hit-test
+  canvas._engCells = [];
+
+  funnelBase.forEach((step, i) => {
+    const cx    = cellW * i + cellW / 2;
+    const prog  = engProg[i];
+    const color = engColors[i];
+    const hover = engHover === i;
+
+    // ── background track ──────────────────────────
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI, false);
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = lineW;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    ctx.restore();
+
+    // ── progress arc ──────────────────────────────
+    if (prog > 0.002) {
+      const endAngle = Math.PI + prog * Math.PI;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, Math.PI, endAngle, false);
+      ctx.shadowColor = color;
+      ctx.shadowBlur  = hover ? 22 : 12;
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = lineW;
+      ctx.lineCap     = 'round';
+      ctx.stroke();
+      ctx.restore();
+
+      // glowing endpoint dot
+      const dotX = cx + r * Math.cos(endAngle);
+      const dotY = cy + r * Math.sin(endAngle);
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur  = hover ? 24 : 14;
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, lineW * 0.62, 0, 2 * Math.PI);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    canvas._engCells.push({ x0: cellW * i, x1: cellW * (i + 1), cy, r, i });
+
+    // ── center text ───────────────────────────────
+    const nameY  = cy - r * 0.56;
+    const countY = cy - r * 0.22;
+
+    ctx.save();
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font      = `500 11px ${FONT.family}`;
+    ctx.fillText(step.label, cx, nameY);
+
+    ctx.fillStyle   = hover ? '#ffffff' : 'rgba(255,255,255,0.92)';
+    ctx.font        = `700 20px ${FONT.family}`;
+    ctx.shadowColor = hover ? color : 'transparent';
+    ctx.shadowBlur  = hover ? 10 : 0;
+    ctx.fillText(engValues[i].toLocaleString('zh-CN'), cx, countY);
+    ctx.restore();
+
+    // ── conversion rate below diameter ────────────
+    ctx.save();
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle    = 'rgba(255,255,255,0.40)';
+    ctx.font         = `12px ${FONT.family}`;
+    if (i > 0) {
+      const rate = ((engValues[i] / engValues[i - 1]) * 100).toFixed(1) + '%';
+      ctx.fillText('↓ ' + rate, cx, cy + lineW * 0.5 + 8);
+    } else {
+      ctx.fillText('基准', cx, cy + lineW * 0.5 + 8);
+    }
+    ctx.restore();
+  });
+}
+
+function animateEngChart(values, duration) {
+  duration = duration || 1200;
+  engValues = values;
+  const maxVal = values[0] || 1;
+  const targets = values.map(v => v / maxVal);
+  const starts  = [...engProg];
+  const t0 = performance.now();
+  cancelAnimationFrame(engAnimId);
+  (function frame(now) {
+    const t    = Math.min((now - t0) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    engProg = targets.map((target, i) => starts[i] + (target - starts[i]) * ease);
+    drawEngChart();
+    if (t < 1) engAnimId = requestAnimationFrame(frame);
+  })(t0);
+}
+
+(function initEngEvents() {
+  const canvas = document.getElementById('chartEngagement');
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const cells = canvas._engCells;
+    if (!cells) return;
+    let hit = -1;
+    cells.forEach(c => {
+      if (mx >= c.x0 && mx < c.x1 && my <= c.cy + c.r * 0.25) hit = c.i;
+    });
+    if (hit !== engHover) { engHover = hit; drawEngChart(); }
+  });
+  canvas.addEventListener('mouseleave', () => {
+    if (engHover !== -1) { engHover = -1; drawEngChart(); }
+  });
+})();
+
+requestAnimationFrame(() => animateEngChart(engValues, 1200));
+window.addEventListener('resize', () => {
+  const c = document.getElementById('chartEngagement');
+  c.width = 0; drawEngChart();
+});
+
+// ─────────────────────────────────────────────
+//  Per-Chart Date Filter
+// ─────────────────────────────────────────────
+function genRangeData(days, endDate) {
+  const labels = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(endDate);
+    d.setDate(d.getDate() - i);
+    labels.push(`${d.getMonth()+1}/${d.getDate()}`);
+  }
+  return {
+    labels,
+    dau:        genTrend(2050, 320, days),
+    recharge:   genTrend(105000, 28000, days),
+    pointsOut:  genTrend(72000, 9000, days),
+    pointsExch: genTrend(31000, 5000, days),
+    comments:   genTrend(430, 120, days),
+    likes:      genTrend(300, 60, days)
+  };
+}
+
+function genChannelData(days) {
+  // vary base ratios slightly by days to simulate different periods
+  const seed = days * 7;
+  const raw = [38.2, 24.6, 16.8, 12.9, 7.5].map((v, i) =>
+    Math.max(3, v + Math.sin(seed + i * 1.7) * 4.5)
+  );
+  const total = raw.reduce((a, b) => a + b, 0);
+  return raw.map(v => Math.round(v / total * 1000) / 10);
+}
+
+// ─────────────────────────────────────────────
+//  KPI Card Range (top-panel + efficiency)
+// ─────────────────────────────────────────────
+const CARD_KEYS = ['ColUser', 'ColEng', 'ColRet', 'Efficiency'];
+
+function genKpiData(days) {
+  const s = days * 1.31;
+  const v = (base, amp, i) => Math.round(base * (1 + Math.sin(s + i) * amp));
+  return {
+    dau:           v(today.dau,          0.12, 1),
+    newUsers:      v(today.newUsers,     0.18, 2),
+    partUsers:     v(today.partUsers,    0.14, 3),
+    pv:            v(today.pv,           0.16, 4),
+    comments:      v(today.comments,     0.20, 5),
+    likes:         v(today.likes,        0.17, 6),
+    ret1:  +(today.ret1  * (1 + Math.sin(s+7)  * 0.10)).toFixed(1),
+    ret3:  +(today.ret3  * (1 + Math.sin(s+8)  * 0.12)).toFixed(1),
+    ret7:  +(today.ret7  * (1 + Math.sin(s+9)  * 0.15)).toFixed(1),
+    ret30: +(today.ret30 * (1 + Math.sin(s+10) * 0.18)).toFixed(1),
+    rewardAmt:        v(today.rewardAmt,        0.15, 11),
+    actConv:          +(today.actConv       * (1 + Math.sin(s+12) * 0.08)).toFixed(1),
+    rewardPerUser:    v(today.rewardPerUser, 0.10, 13),
+    streakDouble:     v(today.streakDouble,  0.14, 14),
+    pointConvRate:    +(today.pointConvRate  * (1 + Math.sin(s+15) * 0.09)).toFixed(1),
+    validCommentRate: +(today.validCommentRate * (1 + Math.sin(s+16) * 0.07)).toFixed(1)
+  };
+}
+
+// ─────────────────────────────────────────────
+//  Flip Digit Animation
+// ─────────────────────────────────────────────
+function flipValue(id, newStr) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const textNode = el.childNodes[0];
+  if (!textNode) return;
+  const oldStr = String(textNode.textContent);
+  if (oldStr === newStr) return;
+
+  const len = Math.max(oldStr.length, newStr.length);
+  const olds = oldStr.padStart(len);
+  const news = newStr.padStart(len);
+
+  const wrap = document.createElement('span');
+  let maxDelay = 0;
+
+  for (let i = 0; i < len; i++) {
+    const oc = olds[i];
+    const nc = news[i];
+    if (oc === nc) {
+      wrap.appendChild(document.createTextNode(nc === ' ' ? '\u00A0' : nc));
+    } else {
+      // right-to-left stagger: units digit flips first
+      const delay = (len - 1 - i) * 0.045;
+      maxDelay = Math.max(maxDelay, delay);
+      const s = document.createElement('span');
+      s.style.cssText = 'display:inline-block;position:relative;vertical-align:top;';
+      const ocSafe = oc === ' ' ? '\u00A0' : oc;
+      const ncSafe = nc === ' ' ? '\u00A0' : nc;
+      s.innerHTML =
+        `<span class="fd-front" style="animation-delay:${delay}s">${ocSafe}</span>` +
+        `<span class="fd-back"  style="animation-delay:${(delay + 0.22).toFixed(3)}s">${ncSafe}</span>`;
+      wrap.appendChild(s);
+    }
+  }
+
+  textNode.textContent = '';
+  el.insertBefore(wrap, el.childNodes[0]);
+
+  setTimeout(() => {
+    textNode.textContent = newStr;
+    wrap.remove();
+  }, Math.round((maxDelay + 0.52) * 1000));
+}
+
+function applyCardRange(key, days) {
+  const kpi = genKpiData(days);
+  if (key === 'ColUser') {
+    flipValue('dau',       fmt(kpi.dau));
+    flipValue('newUsers',  fmt(kpi.newUsers));
+    flipValue('partUsers', fmt(kpi.partUsers));
+  } else if (key === 'ColEng') {
+    flipValue('pv',       fmt(kpi.pv));
+    flipValue('comments', fmt(kpi.comments));
+    flipValue('likes',    fmt(kpi.likes));
+  } else if (key === 'ColRet') {
+    flipValue('ret1',  String(kpi.ret1));
+    flipValue('ret3',  String(kpi.ret3));
+    flipValue('ret7',  String(kpi.ret7));
+    flipValue('ret30', String(kpi.ret30));
+  } else if (key === 'Efficiency') {
+    flipValue('rewardAmt',        fmt(kpi.rewardAmt));
+    flipValue('rewardPerUser',    String(kpi.rewardPerUser));
+    flipValue('actConv',          String(kpi.actConv));
+    flipValue('streakDouble',     fmt(kpi.streakDouble));
+    flipValue('pointConvRate',    String(kpi.pointConvRate));
+    flipValue('validCommentRate', String(kpi.validCommentRate));
+  }
+}
+
+function applyKpiRange(key) {
+  const start = new Date(document.getElementById('kpidS-' + key).value);
+  const end   = new Date(document.getElementById('kpidE-' + key).value);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
+  if (end < start) return;
+  const days = Math.max(1, Math.round((end - start) / 86400000) + 1);
+  applyCardRange(key, days);
+}
+
+function applyChartRange(key, days, endDate) {
+  if (CARD_KEYS.includes(key)) { applyCardRange(key, days); return; }
+  const wrap = document.getElementById('wrap' + key);
+  wrap.classList.add('fading');
+  setTimeout(() => {
+    if (key === 'Channel') {
+      channelChart.data.datasets[0].data = genChannelData(days);
+      channelChart.update();
+    } else {
+      const d = genRangeData(days, endDate);
+      if (key === 'DAU') {
+        dauChart.data.labels = d.labels;
+        dauChart.data.datasets[0].data = d.dau;
+        dauChart.update('none');
+        animateLineReveal(dauChart);
+      } else if (key === 'Recharge') {
+        rechargeChart.data.labels = d.labels;
+        rechargeChart.data.datasets[0].data = d.pointsOut;
+        rechargeChart.data.datasets[1].data = d.pointsExch;
+        rechargeChart.update('none');
+        animateLineReveal(rechargeChart);
+      } else if (key === 'Engagement') {
+        const scale = (d.dau[d.dau.length - 1] / today.dau);
+        animateEngChart(funnelBase.map(f => Math.round(f.value * scale)), 700);
+      }
+    }
+    wrap.classList.remove('fading');
+  }, 200);
+}
+
+function chartFilter(key, days, btn) {
+  document.querySelectorAll(`#cf-${key} .cf-btn`).forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // close picker and update its inputs
+  const dp = document.getElementById('dp-' + key);
+  dp.classList.remove('open');
+  document.querySelector(`#cf-${key} .cf-cal`).classList.remove('open');
+  const end = new Date(2026, 2, 28);
+  const start = new Date(end);
+  start.setDate(start.getDate() - days + 1);
+  document.getElementById('dpStart-' + key).value = start.toISOString().slice(0, 10);
+  document.getElementById('dpEnd-' + key).value = end.toISOString().slice(0, 10);
+  applyChartRange(key, days, end);
+}
+
+function toggleDatePicker(key) {
+  const dp = document.getElementById('dp-' + key);
+  const calBtn = document.querySelector(`#cf-${key} .cf-cal`);
+  const isOpen = dp.classList.contains('open');
+  // close all pickers first
+  document.querySelectorAll('.cf-datepicker').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('.cf-cal').forEach(el => el.classList.remove('open'));
+  if (!isOpen) {
+    dp.classList.add('open');
+    calBtn.classList.add('open');
+  }
+}
+
+function applyChartDate(key) {
+  const start = new Date(document.getElementById('dpStart-' + key).value);
+  const end   = new Date(document.getElementById('dpEnd-' + key).value);
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return;
+  const days = Math.max(1, Math.round((end - start) / 86400000) + 1);
+  // clear quick btn active states for this chart
+  document.querySelectorAll(`#cf-${key} .cf-btn`).forEach(b => b.classList.remove('active'));
+  // close picker
+  document.getElementById('dp-' + key).classList.remove('open');
+  document.querySelector(`#cf-${key} .cf-cal`).classList.remove('open');
+  applyChartRange(key, days, end);
+}
+
+// close pickers when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.chart-filter')) {
+    document.querySelectorAll('.cf-datepicker').forEach(el => el.classList.remove('open'));
+    document.querySelectorAll('.cf-cal').forEach(el => el.classList.remove('open'));
+  }
+}, true);
+
+// ─────────────────────────────────────────────
+//  Column Carousel Navigation
+// ─────────────────────────────────────────────
+const colState = {
+  user: { idx: 0, total: 3 },
+  eng:  { idx: 0, total: 3 },
+  ret:  { idx: 0, total: 4 }
+};
+
+function colNav(col, dir) {
+  const s = colState[col];
+  s.idx = Math.max(0, Math.min(s.total - 1, s.idx + dir));
+
+  document.getElementById('carousel-' + col)
+    .querySelectorAll('.card')
+    .forEach((c, i) => c.classList.toggle('active', i === s.idx));
+
+  document.getElementById('dots-' + col)
+    .querySelectorAll('.col-nav-dot')
+    .forEach((d, i) => d.classList.toggle('active', i === s.idx));
+
+  document.getElementById('btn-' + col + '-prev').disabled = s.idx === 0;
+  document.getElementById('btn-' + col + '-next').disabled = s.idx === s.total - 1;
+}
+
+// ─────────────────────────────────────────────
+//  Init
+// ─────────────────────────────────────────────
+function init() {
+  const now = new Date();
+  document.getElementById('headerDate').textContent =
+    now.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+  // Animated integer counters
+  animateValue('dau',         today.dau,         1200, v => fmt(Math.round(v)));
+  animateValue('newUsers',    today.newUsers,     900,  v => fmt(Math.round(v)));
+  animateValue('partUsers',   today.partUsers,    1050, v => fmt(Math.round(v)));
+  animateValue('pv',          today.pv,           1100, v => fmt(Math.round(v)));
+  animateValue('comments',    today.comments,     800,  v => fmt(Math.round(v)));
+  animateValue('likes',       today.likes,        1000, v => fmt(Math.round(v)));
+  animateValue('rewardAmt',      today.rewardAmt,      1200, v => fmt(Math.round(v)));
+  animateValue('rewardPerUser',  today.rewardPerUser,  900,  v => Math.round(v));
+  animateValue('streakDouble',   today.streakDouble,   1000, v => fmt(Math.round(v)));
+
+  // Static decimal values
+  document.getElementById('ret1').childNodes[0].textContent  = today.ret1;
+  document.getElementById('ret3').childNodes[0].textContent  = today.ret3;
+  document.getElementById('ret7').childNodes[0].textContent  = today.ret7;
+  document.getElementById('ret30').childNodes[0].textContent = today.ret30;
+  document.getElementById('actConv').childNodes[0].textContent        = today.actConv;
+  document.getElementById('pointConvRate').childNodes[0].textContent  = today.pointConvRate;
+  document.getElementById('validCommentRate').childNodes[0].textContent = today.validCommentRate;
+
+  // Diff labels & badges
+  document.getElementById('dauDiff').textContent = diffLabel(today.dau, today.dauYesterday).text;
+  setBadge('dauBadge',       diffLabel(today.dau,       today.dauYesterday));
+  setBadge('newUsersBadge',  diffLabel(today.newUsers,  today.newUsersYest));
+  setBadge('partUsersBadge', diffLabel(today.partUsers, today.partUsersYest));
+
+  // Carousel initial button states
+  document.getElementById('btn-user-prev').disabled = true;
+  document.getElementById('btn-eng-prev').disabled  = true;
+  document.getElementById('btn-ret-prev').disabled  = true;
+
+  // Entrance animations
+  staggerEntrance();
+  initParticles();
+
+  // Module bar animation
+  setTimeout(() => {
+    document.querySelectorAll('.mod-bar').forEach(bar => {
+      bar.style.width = bar.dataset.w;
+    });
+  }, 500);
+
+  // Line chart reveal (slight delay to let charts render)
+  setTimeout(() => {
+    animateLineReveal(dauChart);
+    animateLineReveal(rechargeChart);
+  }, 300);
+
+  // 30s data refresh flicker on all KPI values
+  setInterval(() => {
+    document.querySelectorAll('.card-value').forEach(el => {
+      el.classList.remove('num-flash');
+      void el.offsetWidth;
+      el.classList.add('num-flash');
+    });
+  }, 30000);
+}
+
+init();
+
+// ─────────────────────────────────────────────
+//  CSV Import
+// ─────────────────────────────────────────────
+// fmt types: 'fmt'=fmt(), 'int'=String(round), 'float'=String(parseFloat), 'string'=skip display
+// ORDER MATTERS: more specific keys must come before substrings they contain
+const FIELD_MAP = [
+  { keys: ['retention_30d', '30日留存', '30 日留存'], id: 'ret30',            fmt: 'float' },
+  { keys: ['retention_1d',  '1日留存',  '1 日留存'],  id: 'ret1',             fmt: 'float' },
+  { keys: ['retention_3d',  '3日留存',  '3 日留存'],  id: 'ret3',             fmt: 'float' },
+  { keys: ['retention_7d',  '7日留存',  '7 日留存'],  id: 'ret7',             fmt: 'float' },
+  { keys: ['double_checkin', '连续签到翻倍'],          id: 'streakDouble',     fmt: 'fmt'   },
+  { keys: ['valid_rate',    '有效评论达标率'],          id: 'validCommentRate', fmt: 'float' },
+  { keys: ['valid_comments','有效评论'],                id: 'likes',            fmt: 'fmt'   },
+  { keys: ['coin_exchange', '积分兑换率'],              id: 'pointConvRate',    fmt: 'float' },
+  { keys: ['checkin_active','签到激活'],                id: 'funnel_1',         fmt: 'int'   },
+  { keys: ['task_complete', '完成任务'],                id: 'funnel_3',         fmt: 'int'   },
+  { keys: ['exchange',      '积分兑换金币'],            id: 'funnel_4',         fmt: 'int'   },
+  { keys: ['new_users',     '新增用户'],                id: 'newUsers',         fmt: 'fmt'   },
+  { keys: ['page_view',     '总浏览', 'pv'],            id: 'pv',               fmt: 'fmt'   },
+  { keys: ['dau',           '日活', '活跃用户'],        id: 'dau',              fmt: 'fmt'   },
+  { keys: ['checkin',       '连续签到'],                id: 'partUsers',        fmt: 'fmt'   },
+  { keys: ['comments',      '评论数'],                  id: 'comments',         fmt: 'fmt'   },
+  { keys: ['coins',         '奖励金币'],                id: 'rewardAmt',        fmt: 'fmt'   },
+  { keys: ['conversion',    '活动转化率'],              id: 'actConv',          fmt: 'float' },
+  { keys: ['avg_reward',    '人均奖励'],                id: 'rewardPerUser',    fmt: 'int'   },
+  { keys: ['login',         '登录人数'],                id: 'funnel_0',         fmt: 'int'   },
+  { keys: ['date',          '日期'],                    id: 'date',             fmt: 'string'},
+];
+
+function csvNorm(s) {
+  return s.toLowerCase().replace(/[\s_\-]/g, '');
+}
+
+function matchColumn(colName) {
+  const norm = csvNorm(colName);
+  if (!norm) return null;
+  for (const field of FIELD_MAP) {
+    for (const key of field.keys) {
+      const nk = csvNorm(key);
+      if (norm === nk || norm.includes(nk)) return field;
+    }
+  }
+  return null;
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let inQuote = false, cur = '';
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQuote = !inQuote;
+    } else if (c === ',' && !inQuote) {
+      result.push(cur.trim()); cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return null;
+  const headers = splitCSVLine(lines[0]);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const vals = splitCSVLine(lines[i]);
+    const row = {};
+    headers.forEach((h, idx) => { row[h] = (vals[idx] || '').trim(); });
+    rows.push(row);
+  }
+  return { headers, rows };
+}
+
+function showToast(msg, type) {
+  const el = document.getElementById('importToast');
+  el.textContent = msg;
+  el.className = 'import-toast ' + type + ' show';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+function triggerImport() {
+  document.getElementById('csvFileInput').value = '';
+  document.getElementById('csvFileInput').click();
+}
+
+function handleCsvFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => processCSV(e.target.result);
+  reader.readAsText(file, 'UTF-8');
+}
+
+function processCSV(text) {
+  const parsed = parseCSV(text);
+  if (!parsed) { showToast('CSV 解析失败，请检查文件格式', 'warn'); return; }
+  const { headers, rows } = parsed;
+  if (!rows.length) { showToast('CSV 没有数据行', 'warn'); return; }
+
+  // Build column → field map
+  const colMap = [];
+  let unmatchedCount = 0;
+  headers.forEach(h => {
+    if (!h.trim()) return;
+    const field = matchColumn(h);
+    if (field) colMap.push({ colName: h, field });
+    else unmatchedCount++;
+  });
+
+  const lastRow = rows[rows.length - 1];
+  const newEngValues = [...engValues];
+  let funnelUpdated = false;
+
+  colMap.forEach(({ colName, field }) => {
+    const raw = lastRow[colName];
+    if (raw === '' || raw == null) return;
+    const id = field.id;
+
+    // Funnel chart values
+    if (id.startsWith('funnel_')) {
+      const idx = parseInt(id.split('_')[1]);
+      const v = parseInt(raw);
+      if (!isNaN(v)) { newEngValues[idx] = v; funnelUpdated = true; }
+      return;
+    }
+    if (id === 'date') return;
+
+    // KPI cards
+    if (field.fmt === 'fmt') {
+      const v = parseInt(raw);
+      if (!isNaN(v)) flipValue(id, fmt(v));
+    } else if (field.fmt === 'int') {
+      const v = parseInt(raw);
+      if (!isNaN(v)) flipValue(id, String(v));
+    } else if (field.fmt === 'float') {
+      const v = parseFloat(raw);
+      if (!isNaN(v)) flipValue(id, String(v));
+    }
+  });
+
+  if (funnelUpdated) animateEngChart(newEngValues, 700);
+
+  // Update DAU trend chart if multiple rows have date + dau
+  const dateCol = colMap.find(c => c.field.id === 'date');
+  const dauCol  = colMap.find(c => c.field.id === 'dau');
+  if (rows.length > 1 && dateCol && dauCol) {
+    dauChart.data.labels = rows.map(r => r[dateCol.colName]);
+    dauChart.data.datasets[0].data = rows.map(r => parseFloat(r[dauCol.colName]) || 0);
+    dauChart.update('none');
+    animateLineReveal(dauChart);
+  }
+
+  if (unmatchedCount > 0)
+    showToast('数据导入成功 ✓  ·  ' + unmatchedCount + ' 个字段未能识别', 'warn');
+  else
+    showToast('数据导入成功 ✓', 'success');
+}
+
+// ─────────────────────────────────────────────
+//  CSV Template Download
+// ─────────────────────────────────────────────
+function downloadTemplate() {
+  const cols = [
+    'date','dau','new_users','checkin','page_view','comments',
+    'valid_comments','retention_1d','retention_3d','retention_7d','retention_30d',
+    'coins','conversion','avg_reward','double_checkin','coin_exchange','valid_rate',
+    'login','checkin_active','task_complete','exchange'
+  ];
+  const example = [
+    '2026-03-28','2143','318','1289','8734','437',
+    '312','36.2','15.8','11.4','4.9',
+    '134280','18.3','104','342','34.8','71.4',
+    '2143','1289','643','356'
+  ];
+  const csv = cols.join(',') + '\n' + example.join(',');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '数据看板导入模板.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function toggleKpiPicker(key, btn) {
+  console.log('toggleKpiPicker called:', key);
+  const dp = document.getElementById('kpi-dp-' + key);
+  const isOpen = dp.classList.contains('open');
+  // close all
+  document.querySelectorAll('[id^="kpi-dp-"]').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('.cf-cal').forEach(el => el.classList.remove('open'));
+  if (!isOpen) {
+    dp.classList.add('open');
+    btn.classList.add('open');
+  }
+}
+</script>
+</body>
+</html>
