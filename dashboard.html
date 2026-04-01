@@ -597,14 +597,39 @@
     }
     .section-header .section-title { margin-bottom: 0; flex: 1; }
 
+    /* ── Full number sub-display ── */
+    .card-full-num {
+      font-size: 12px;
+      color: rgba(255,255,255,0.25);
+      margin-top: 4px;
+      position: relative;
+      font-weight: 400;
+      letter-spacing: 0;
+    }
+
+    /* ── Efficiency 5-card grid (3+2 centered) ── */
+    .efficiency-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 16px;
+    }
+    .efficiency-grid .card:nth-child(1) { grid-column: 1 / 3; }
+    .efficiency-grid .card:nth-child(2) { grid-column: 3 / 5; }
+    .efficiency-grid .card:nth-child(3) { grid-column: 5 / 7; }
+    .efficiency-grid .card:nth-child(4) { grid-column: 2 / 4; }
+    .efficiency-grid .card:nth-child(5) { grid-column: 4 / 6; }
+
     /* ── Responsive ── */
     @media (max-width: 1100px) {
       .grid-4 { grid-template-columns: repeat(2, 1fr); }
       .charts-grid { grid-template-columns: 1fr; }
+      .efficiency-grid { grid-template-columns: repeat(2, 1fr); }
+      .efficiency-grid .card:nth-child(n) { grid-column: auto; }
     }
     @media (max-width: 720px) {
       .grid-2, .grid-3 { grid-template-columns: 1fr; }
       .grid-4 { grid-template-columns: 1fr; }
+      .efficiency-grid { grid-template-columns: 1fr; }
       .main { padding: 16px 14px 36px; }
       .header { padding: 14px 18px; }
       .card-value { font-size: 32px; }
@@ -620,8 +645,8 @@
   <div class="header-left">
     <div class="header-icon">📊</div>
     <div>
-      <h1>活动运营数据看板</h1>
-      <div class="header-meta">Activity Operations Dashboard</div>
+      <h1>鼠小宝的活动看板</h1>
+      <div class="header-meta">Activity Dashboard</div>
     </div>
   </div>
   <div class="header-right">
@@ -662,6 +687,7 @@
         <div class="card-bg"></div>
         <div class="card-label"><span class="dot"></span>签到人数</div>
         <div class="card-value" id="checkinCount">—</div>
+        <div class="card-full-num" id="checkinCountFull"></div>
         <div class="card-sub">今日完成签到用户</div>
       </div>
 
@@ -672,6 +698,7 @@
         <div class="card-bg"></div>
         <div class="card-label"><span class="dot"></span>任务领取人数</div>
         <div class="card-value" id="taskRewardUsers">—</div>
+        <div class="card-full-num" id="taskRewardUsersFull"></div>
         <div class="card-sub">今日领取任务奖励用户</div>
       </div>
 
@@ -682,6 +709,7 @@
         <div class="card-bg"></div>
         <div class="card-label"><span class="dot"></span>奖励积分总量</div>
         <div class="card-value" id="rewardPoints">—<span class="unit">积分</span></div>
+        <div class="card-full-num" id="rewardPointsFull"></div>
         <div class="card-sub">今日签到奖励积分发放</div>
       </div>
 
@@ -704,7 +732,7 @@
         </div>
       </span>
     </div>
-    <div class="cards-grid grid-3">
+    <div class="efficiency-grid">
 
       <div class="card" style="
         --accent-line:linear-gradient(90deg,transparent,#818cf8,transparent);
@@ -713,6 +741,7 @@
         <div class="card-bg"></div>
         <div class="card-label"><span class="dot"></span>连续签到7天人数</div>
         <div class="card-value" id="streak7">—<span class="unit">人</span></div>
+        <div class="card-full-num" id="streak7Full"></div>
         <div class="card-sub">连续签到满7天用户</div>
       </div>
 
@@ -723,6 +752,7 @@
         <div class="card-bg"></div>
         <div class="card-label"><span class="dot"></span>连续签到14天人数</div>
         <div class="card-value" id="streak14">—<span class="unit">人</span></div>
+        <div class="card-full-num" id="streak14Full"></div>
         <div class="card-sub">连续签到满14天用户</div>
       </div>
 
@@ -733,6 +763,7 @@
         <div class="card-bg"></div>
         <div class="card-label"><span class="dot"></span>连续签到30天人数</div>
         <div class="card-value" id="streak30">—<span class="unit">人</span></div>
+        <div class="card-full-num" id="streak30Full"></div>
         <div class="card-sub">连续签到满30天用户</div>
       </div>
 
@@ -743,6 +774,7 @@
         <div class="card-bg"></div>
         <div class="card-label"><span class="dot"></span>人均奖励经验</div>
         <div class="card-value" id="avgReward">—<span class="unit">经验</span></div>
+        <div class="card-full-num" id="avgRewardFull"></div>
         <div class="card-sub">人均获得经验值</div>
       </div>
 
@@ -753,6 +785,7 @@
         <div class="card-bg"></div>
         <div class="card-label"><span class="dot"></span>任务领取金币</div>
         <div class="card-value" id="taskGold">—<span class="unit">金币</span></div>
+        <div class="card-full-num" id="taskGoldFull"></div>
         <div class="card-sub">今日任务奖励金币发放</div>
       </div>
 
@@ -1215,18 +1248,31 @@ function flipValue(id, newStr) {
   }, Math.round((maxDelay + 0.52) * 1000));
 }
 
+function setFullNum(id, n) {
+  const el = document.getElementById(id + 'Full');
+  if (el) el.textContent = Math.round(n).toLocaleString('zh-CN');
+}
+
 function applyCardRange(key, days) {
   const kpi = genKpiData(days);
   if (key === 'UserScale') {
     flipValue('checkinCount',    fmt(kpi.checkinCount));
+    setFullNum('checkinCount',    kpi.checkinCount);
     flipValue('taskRewardUsers', fmt(kpi.taskRewardUsers));
+    setFullNum('taskRewardUsers', kpi.taskRewardUsers);
     flipValue('rewardPoints',    fmt(kpi.rewardPoints));
+    setFullNum('rewardPoints',    kpi.rewardPoints);
   } else if (key === 'Efficiency') {
     flipValue('streak7',  fmt(kpi.streak7));
+    setFullNum('streak7',  kpi.streak7);
     flipValue('streak14', fmt(kpi.streak14));
+    setFullNum('streak14', kpi.streak14);
     flipValue('streak30', fmt(kpi.streak30));
+    setFullNum('streak30', kpi.streak30);
     flipValue('avgReward', String(kpi.avgReward));
+    setFullNum('avgReward', kpi.avgReward);
     flipValue('taskGold',  String(kpi.taskGold));
+    setFullNum('taskGold',  kpi.taskGold);
   }
 }
 
@@ -1332,6 +1378,15 @@ function init() {
   animateValue('streak30',        today.streak30,        1100, v => fmt(Math.round(v)));
   animateValue('avgReward',       today.avgReward,       800,  v => Math.round(v));
   animateValue('taskGold',        today.taskGold,        800,  v => Math.round(v));
+
+  setFullNum('checkinCount',    today.checkinCount);
+  setFullNum('taskRewardUsers', today.taskRewardUsers);
+  setFullNum('rewardPoints',    today.rewardPoints);
+  setFullNum('streak7',         today.streak7);
+  setFullNum('streak14',        today.streak14);
+  setFullNum('streak30',        today.streak30);
+  setFullNum('avgReward',       today.avgReward);
+  setFullNum('taskGold',        today.taskGold);
 
   staggerEntrance();
   initParticles();
