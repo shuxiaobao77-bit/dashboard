@@ -1053,10 +1053,10 @@ function genTrend(base, amp, n) {
     Math.max(0, Math.round(base + Math.sin(i * 0.8) * amp + Math.cos(i * 1.5) * amp * 0.4)));
 }
 
-const init7Labels = ['3/26','3/27','3/28','3/29','3/30','3/31','4/1'];
-const init7Checkin   = [22800, 23500, 24100, 23700, 24350, 23900, 24000];
-const init7RewardPts = [1140000, 1175000, 1205000, 1185000, 1218000, 1196000, 1200000];
-const init7TaskPts   = [327000, 343000, 362000, 348000, 371000, 356000, 350000];
+const init7Labels = [];
+const init7Checkin   = [];
+const init7RewardPts = [];
+const init7TaskPts   = [];
 
 // ─────────────────────────────────────────────
 //  Helpers
@@ -1534,7 +1534,7 @@ function toggleKpiPicker(key, btn) {
 // ─────────────────────────────────────────────
 //  Init
 // ─────────────────────────────────────────────
-const CSV_STORE_KEY = 'dashboard_csv_data_v1';
+const CSV_STORE_KEY = 'dashboard_csv_data_v2';
 
 function init() {
   const now = new Date();
@@ -1548,9 +1548,9 @@ function init() {
     if (s) savedRows = JSON.parse(s);
   } catch(e) {}
 
-  let kpi = { ...today };
   if (savedRows && savedRows.length) {
     const latest = savedRows[savedRows.length - 1];
+    const kpi = { ...today };
     if (latest.checkinCount    != null) kpi.checkinCount    = latest.checkinCount;
     if (latest.taskRewardUsers != null) kpi.taskRewardUsers = latest.taskRewardUsers;
     if (latest.rewardPoints    != null) kpi.rewardPoints    = latest.rewardPoints;
@@ -1559,16 +1559,15 @@ function init() {
     if (latest.streak30        != null) kpi.streak30        = latest.streak30;
     if (latest.avgReward       != null) kpi.avgReward       = latest.avgReward;
     if (latest.taskGold        != null) kpi.taskGold        = latest.taskGold;
+    animateValue('checkinCount',    kpi.checkinCount,    1200, v => fmt(Math.round(v)));
+    animateValue('taskRewardUsers', kpi.taskRewardUsers, 900,  v => fmt(Math.round(v)));
+    animateValue('rewardPoints',    kpi.rewardPoints,    1300, v => fmt(Math.round(v)));
+    animateValue('streak7',         kpi.streak7,         900,  v => fmt(Math.round(v)));
+    animateValue('streak14',        kpi.streak14,        1000, v => fmt(Math.round(v)));
+    animateValue('streak30',        kpi.streak30,        1100, v => fmt(Math.round(v)));
+    animateValue('avgReward',       kpi.avgReward,       800,  v => Math.round(v));
+    animateValue('taskGold',        kpi.taskGold,        800,  v => Math.round(v));
   }
-
-  animateValue('checkinCount',    kpi.checkinCount,    1200, v => fmt(Math.round(v)));
-  animateValue('taskRewardUsers', kpi.taskRewardUsers, 900,  v => fmt(Math.round(v)));
-  animateValue('rewardPoints',    kpi.rewardPoints,    1300, v => fmt(Math.round(v)));
-  animateValue('streak7',         kpi.streak7,         900,  v => fmt(Math.round(v)));
-  animateValue('streak14',        kpi.streak14,        1000, v => fmt(Math.round(v)));
-  animateValue('streak30',        kpi.streak30,        1100, v => fmt(Math.round(v)));
-  animateValue('avgReward',       kpi.avgReward,       800,  v => Math.round(v));
-  animateValue('taskGold',        kpi.taskGold,        800,  v => Math.round(v));
 
   staggerEntrance();
   initParticles();
