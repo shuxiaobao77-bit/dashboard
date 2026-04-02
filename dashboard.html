@@ -1534,24 +1534,59 @@ function toggleKpiPicker(key, btn) {
 // ─────────────────────────────────────────────
 //  Init
 // ─────────────────────────────────────────────
+const CSV_STORE_KEY = 'dashboard_csv_data_v1';
+
 function init() {
   const now = new Date();
   document.getElementById('headerDate').textContent =
     now.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
 
-  animateValue('checkinCount',    today.checkinCount,    1200, v => fmt(Math.round(v)));
-  animateValue('taskRewardUsers', today.taskRewardUsers, 900,  v => fmt(Math.round(v)));
-  animateValue('rewardPoints',    today.rewardPoints,    1300, v => fmt(Math.round(v)));
-  animateValue('streak7',         today.streak7,         900,  v => fmt(Math.round(v)));
-  animateValue('streak14',        today.streak14,        1000, v => fmt(Math.round(v)));
-  animateValue('streak30',        today.streak30,        1100, v => fmt(Math.round(v)));
-  animateValue('avgReward',       today.avgReward,       800,  v => Math.round(v));
-  animateValue('taskGold',        today.taskGold,        800,  v => Math.round(v));
+  // Load saved CSV data from localStorage if available
+  let savedRows = null;
+  try {
+    const s = localStorage.getItem(CSV_STORE_KEY);
+    if (s) savedRows = JSON.parse(s);
+  } catch(e) {}
+
+  let kpi = { ...today };
+  if (savedRows && savedRows.length) {
+    const latest = savedRows[savedRows.length - 1];
+    if (latest.checkinCount    != null) kpi.checkinCount    = latest.checkinCount;
+    if (latest.taskRewardUsers != null) kpi.taskRewardUsers = latest.taskRewardUsers;
+    if (latest.rewardPoints    != null) kpi.rewardPoints    = latest.rewardPoints;
+    if (latest.streak7         != null) kpi.streak7         = latest.streak7;
+    if (latest.streak14        != null) kpi.streak14        = latest.streak14;
+    if (latest.streak30        != null) kpi.streak30        = latest.streak30;
+    if (latest.avgReward       != null) kpi.avgReward       = latest.avgReward;
+    if (latest.taskGold        != null) kpi.taskGold        = latest.taskGold;
+  }
+
+  animateValue('checkinCount',    kpi.checkinCount,    1200, v => fmt(Math.round(v)));
+  animateValue('taskRewardUsers', kpi.taskRewardUsers, 900,  v => fmt(Math.round(v)));
+  animateValue('rewardPoints',    kpi.rewardPoints,    1300, v => fmt(Math.round(v)));
+  animateValue('streak7',         kpi.streak7,         900,  v => fmt(Math.round(v)));
+  animateValue('streak14',        kpi.streak14,        1000, v => fmt(Math.round(v)));
+  animateValue('streak30',        kpi.streak30,        1100, v => fmt(Math.round(v)));
+  animateValue('avgReward',       kpi.avgReward,       800,  v => Math.round(v));
+  animateValue('taskGold',        kpi.taskGold,        800,  v => Math.round(v));
 
   staggerEntrance();
   initParticles();
 
   setTimeout(() => {
+    if (savedRows && savedRows.length) {
+      const labels    = savedRows.map(r => r.date);
+      const checkin   = savedRows.map(r => r.checkinCount  ?? 0);
+      const rewardPts = savedRows.map(r => r.rewardPoints  ?? 0);
+      const taskPts   = savedRows.map(r => r.taskPoints    ?? 0);
+      dauChart.data.labels = labels;
+      dauChart.data.datasets[0].data = checkin;
+      dauChart.update('none');
+      rechargeChart.data.labels = labels;
+      rechargeChart.data.datasets[0].data = rewardPts;
+      rechargeChart.data.datasets[1].data = taskPts;
+      rechargeChart.update('none');
+    }
     animateLineReveal(dauChart);
     animateLineReveal(rechargeChart);
   }, 300);
@@ -1568,35 +1603,8 @@ function init() {
 init();
 
 // ─────────────────────────────────────────────
-//  CSV Import
+//  CSV Import — 结构化字段解析
 // ─────────────────────────────────────────────
-const FIELD_MAP = [
-  { keys: ['checkin_count', '签到人数'],       id: 'checkinCount',    fmt: 'fmt'   },
-  { keys: ['task_users',    '任务领取人数'],    id: 'taskRewardUsers', fmt: 'fmt'   },
-  { keys: ['reward_points', '奖励积分'],        id: 'rewardPoints',    fmt: 'fmt'   },
-  { keys: ['streak7',       '连续签到7天'],     id: 'streak7',         fmt: 'fmt'   },
-  { keys: ['streak14',      '连续签到14天'],    id: 'streak14',        fmt: 'fmt'   },
-  { keys: ['streak30',      '连续签到30天'],    id: 'streak30',        fmt: 'fmt'   },
-  { keys: ['avg_exp',       '人均奖励经验'],    id: 'avgReward',       fmt: 'int'   },
-  { keys: ['task_gold',     '任务领取金币'],    id: 'taskGold',        fmt: 'int'   },
-  { keys: ['date',          '日期'],            id: 'date',            fmt: 'string'},
-];
-
-function csvNorm(s) {
-  return s.toLowerCase().replace(/[\s_\-]/g, '');
-}
-
-function matchColumn(colName) {
-  const norm = csvNorm(colName);
-  if (!norm) return null;
-  for (const field of FIELD_MAP) {
-    for (const key of field.keys) {
-      const nk = csvNorm(key);
-      if (norm === nk || norm.includes(nk)) return field;
-    }
-  }
-  return null;
-}
 
 function splitCSVLine(line) {
   const result = [];
@@ -1616,10 +1624,10 @@ function splitCSVLine(line) {
   return result;
 }
 
-function parseCSV(text) {
+function parseCSVRaw(text) {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return null;
-  const headers = splitCSVLine(lines[0]);
+  const headers = splitCSVLine(lines[0]).map(h => h.trim());
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
@@ -1631,12 +1639,94 @@ function parseCSV(text) {
   return { headers, rows };
 }
 
+function extractNum(text, pattern) {
+  const m = text.match(pattern);
+  return m ? parseInt(m[1]) : null;
+}
+
+function parseCheckinField(raw) {
+  return {
+    rewardPoints: extractNum(raw, /奖励积分[：:]\s*(\d+)/),
+    checkinCount: extractNum(raw, /签到人数[：:]\s*(\d+)/),
+    avgReward:    extractNum(raw, /人均奖励[：:]\s*(\d+)/),
+    streak7:      extractNum(raw, /连续签到7天[：:]\s*(\d+)/),
+    streak14:     extractNum(raw, /连续签到14天[：:]\s*(\d+)/),
+    streak30:     extractNum(raw, /连续签到30天[：:]\s*(\d+)/)
+  };
+}
+
+function parseTaskField(raw) {
+  return {
+    taskPoints:      extractNum(raw, /领取积分[：:]\s*(\d+)/),
+    taskGold:        extractNum(raw, /领取金币[：:]\s*(\d+)/),
+    taskRewardUsers: extractNum(raw, /领取人数[：:]\s*(\d+)/)
+  };
+}
+
+function buildParsedRows(rows) {
+  return rows.map(row => {
+    const date       = row['日期'] || '';
+    const checkin    = parseCheckinField(row['签到奖励数据'] || '');
+    const task       = parseTaskField(row['任务奖励数据'] || '');
+    return {
+      date,
+      rewardPoints:    checkin.rewardPoints,
+      checkinCount:    checkin.checkinCount,
+      avgReward:       checkin.avgReward,
+      streak7:         checkin.streak7,
+      streak14:        checkin.streak14,
+      streak30:        checkin.streak30,
+      taskPoints:      task.taskPoints,
+      taskGold:        task.taskGold,
+      taskRewardUsers: task.taskRewardUsers
+    };
+  }).filter(r => r.date);
+}
+
+function updateCardsFromRow(r) {
+  if (r.checkinCount    != null) flipValue('checkinCount',    fmt(r.checkinCount));
+  if (r.taskRewardUsers != null) flipValue('taskRewardUsers', fmt(r.taskRewardUsers));
+  if (r.rewardPoints    != null) flipValue('rewardPoints',    fmt(r.rewardPoints));
+  if (r.streak7         != null) flipValue('streak7',         fmt(r.streak7));
+  if (r.streak14        != null) flipValue('streak14',        fmt(r.streak14));
+  if (r.streak30        != null) flipValue('streak30',        fmt(r.streak30));
+  if (r.avgReward       != null) flipValue('avgReward',       String(r.avgReward));
+  if (r.taskGold        != null) flipValue('taskGold',        String(r.taskGold));
+}
+
+function updateChartsFromRows(allRows) {
+  const labels    = allRows.map(r => r.date);
+  const checkin   = allRows.map(r => r.checkinCount  ?? 0);
+  const rewardPts = allRows.map(r => r.rewardPoints  ?? 0);
+  const taskPts   = allRows.map(r => r.taskPoints    ?? 0);
+
+  const wrapDAU      = document.getElementById('wrapDAU');
+  const wrapRecharge = document.getElementById('wrapRecharge');
+  wrapDAU.classList.add('fading');
+  wrapRecharge.classList.add('fading');
+
+  setTimeout(() => {
+    dauChart.data.labels = labels;
+    dauChart.data.datasets[0].data = checkin;
+    dauChart.update('none');
+    animateLineReveal(dauChart);
+    wrapDAU.classList.remove('fading');
+
+    rechargeChart.data.labels = labels;
+    rechargeChart.data.datasets[0].data = rewardPts;
+    rechargeChart.data.datasets[1].data = taskPts;
+    rechargeChart.update('none');
+    animateLineReveal(rechargeChart);
+    wrapRecharge.classList.remove('fading');
+  }, 200);
+}
+
 function showToast(msg, type) {
   const el = document.getElementById('importToast');
   el.textContent = msg;
   el.className = 'import-toast ' + type + ' show';
   clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.remove('show'), 2000);
+  el._t = setTimeout(() => el.classList.remove('show'), 4000);
 }
 
 function triggerImport() {
@@ -1649,66 +1739,42 @@ function handleCsvFile(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => processCSV(e.target.result);
-  reader.readAsText(file, 'UTF-8');
+  reader.readAsText(file, 'UTF-8');  // BOM stripped below
 }
 
 function processCSV(text) {
-  const parsed = parseCSV(text);
+  // Strip UTF-8 BOM if present
+  text = text.replace(/^\uFEFF/, '');
+  const parsed = parseCSVRaw(text);
   if (!parsed) { showToast('CSV 解析失败，请检查文件格式', 'warn'); return; }
-  const { headers, rows } = parsed;
-  if (!rows.length) { showToast('CSV 没有数据行', 'warn'); return; }
+  if (!parsed.rows.length) { showToast('CSV 没有数据行', 'warn'); return; }
 
-  const colMap = [];
-  let unmatchedCount = 0;
-  headers.forEach(h => {
-    if (!h.trim()) return;
-    const field = matchColumn(h);
-    if (field) colMap.push({ colName: h, field });
-    else unmatchedCount++;
-  });
+  const allRows = buildParsedRows(parsed.rows);
+  if (!allRows.length) { showToast('未找到有效数据行（缺少日期列）', 'warn'); return; }
 
-  const lastRow = rows[rows.length - 1];
+  // Sort ascending by date string
+  allRows.sort((a, b) => a.date.localeCompare(b.date));
 
-  colMap.forEach(({ colName, field }) => {
-    const raw = lastRow[colName];
-    if (raw === '' || raw == null) return;
-    const id = field.id;
-    if (id === 'date') return;
-    if (field.fmt === 'fmt') {
-      const v = parseInt(raw);
-      if (!isNaN(v)) flipValue(id, fmt(v));
-    } else if (field.fmt === 'int') {
-      const v = parseInt(raw);
-      if (!isNaN(v)) flipValue(id, String(v));
-    } else if (field.fmt === 'float') {
-      const v = parseFloat(raw);
-      if (!isNaN(v)) flipValue(id, String(v));
-    }
-  });
+  // Latest row for cards
+  const latest = allRows[allRows.length - 1];
 
-  // Update checkin trend chart if multiple rows have date + checkin_count
-  const dateCol   = colMap.find(c => c.field.id === 'date');
-  const checkinCol = colMap.find(c => c.field.id === 'checkinCount');
-  if (rows.length > 1 && dateCol && checkinCol) {
-    dauChart.data.labels = rows.map(r => r[dateCol.colName]);
-    dauChart.data.datasets[0].data = rows.map(r => parseFloat(r[checkinCol.colName]) || 0);
-    dauChart.update('none');
-    animateLineReveal(dauChart);
-  }
+  // Persist to localStorage
+  localStorage.setItem(CSV_STORE_KEY, JSON.stringify(allRows));
 
-  if (unmatchedCount > 0)
-    showToast('数据导入成功 ✓  ·  ' + unmatchedCount + ' 个字段未能识别', 'warn');
-  else
-    showToast('数据导入成功 ✓', 'success');
+  // Update UI
+  updateCardsFromRow(latest);
+  updateChartsFromRows(allRows);
+
+  showToast(`✅ 数据已更新，最新日期：${latest.date}`, 'success');
 }
 
 // ─────────────────────────────────────────────
 //  CSV Template Download
 // ─────────────────────────────────────────────
 function downloadTemplate() {
-  const cols    = ['date','checkin_count','task_users','reward_points','streak7','streak14','streak30','avg_exp','task_gold'];
-  const example = ['2026-04-01','24000','3500','1200000','3900','2100','950','51','150'];
-  const csv = cols.join(',') + '\n' + example.join(',');
+  const header  = 'id,日期,签到奖励数据,任务奖励数据,操作时间';
+  const example = '1,2026-04-01,"奖励积分：1200000，签到人数：24000，人均奖励：51，连续签到7天：3900，连续签到14天：2100，连续签到30天：950","领取积分：350000，领取金币：150，领取人数：3500",2026-04-01 10:00:00';
+  const csv = header + '\n' + example;
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
